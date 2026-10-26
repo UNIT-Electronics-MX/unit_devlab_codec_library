@@ -4,15 +4,16 @@ Arduino library for ES-series codecs in UNIT DevLab audio projects. The current 
 
 ## Required libraries
 
-Install each fork from its repository in a separate folder inside your Arduino `libraries` directory:
+Install these repositories in separate folders inside your Arduino `libraries` directory:
 
 | Arduino library | Repository |
 |---|---|
 | `DevLab_AudioDriver` | [unit_devlab_fork_arduino_audio_driver](https://github.com/UNIT-Electronics-MX/unit_devlab_fork_arduino_audio_driver) |
 | `DevLab_AudioTools` | [unit_devlab_fork_arduino_audio_tools](https://github.com/UNIT-Electronics-MX/unit_devlab_fork_arduino_audio_tools) |
 | `DevLab_LibHelix` | [unit_devlab_fork_arduino_libhelix](https://github.com/UNIT-Electronics-MX/unit_devlab_fork_arduino_libhelix) |
+| `DevLab_BL` (Pomodoro eyes example) | [unit_devlab_bl_library](https://github.com/UNIT-Electronics-MX/unit_devlab_bl_library) |
 
-The sine wave example needs Audio Driver and Audio Tools. The MP3 examples need all three forks. The OLED examples also need Adafruit GFX and Adafruit SSD1306. The encoder volume example needs Adafruit NeoPixel on ESP32-C6.
+The sine wave example needs Audio Driver and Audio Tools. The MP3 examples need all three forks. The OLED examples also need Adafruit GFX and Adafruit SSD1306. The Pomodoro example also needs `DevLab_BL` for its eyes display, without enabling Bluetooth. Both encoder examples need Adafruit NeoPixel on ESP32-C6.
 
 The unique `DevLab_*.h` headers select these libraries even when the original libraries are installed. The longer `unit_devlab_fork_*.h` headers remain available for existing sketches. Install the forks from GitHub until they are registered in Arduino Library Manager. Accordingly, `library.properties` does not declare automatic dependencies yet.
 
@@ -52,7 +53,7 @@ void setup() {
 | `player_mp3_uart` | Control playback over the serial port | microSD |
 | `player_mp3_oled` | MP3 player with display | microSD, OLED, optional encoder |
 | `player_mp3_oled_encoder_volume` | Display and encoder volume control | microSD, OLED, UE0172 encoder |
-| `player_mp3_oled_encoder_pomodoro` | MP3 player with an OLED Pomodoro timer | microSD, OLED, UE0172 encoder |
+| `player_mp3_oled_encoder_pomodoro` | MP3 player with a Pomodoro timer and Kubi eyes | microSD, OLED, UE0172 encoder |
 | `player_mp3_oled_slider` | Display and slider on a second I2C bus | microSD, OLED, encoder, slider |
 
 The sine wave sketch selects these pins at compile time:
@@ -66,11 +67,11 @@ Each sketch uses the pin mapping of its DualMCU prototype. Pin assignments may d
 
 ### Pomodoro controls
 
-`player_mp3_oled_encoder_pomodoro` keeps MP3 playback active while its timer runs. Hold the encoder button for 800 ms to switch between the player and Pomodoro screens. On the Pomodoro screen, click to start or pause and double-click to reset the current phase. Turning the encoder while a focus phase is stopped sets its length from 1 to 60 minutes; turning it while running or during a break adjusts music volume.
+`player_mp3_oled_encoder_pomodoro` keeps MP3 playback active while its timer runs. Hold the encoder button for 800 ms to cycle through the player, Pomodoro timer, and eyes screens. On the timer and eyes screens, click to start or pause and double-click to reset the current phase. Turning the encoder while a focus phase is stopped sets its length from 1 to 60 minutes; turning it while running or during a break adjusts music volume.
 
-The default cycle is 25 minutes of focus, 5 minutes of short break, and a 15-minute long break after every four completed focus phases. Phases advance automatically. Transitions appear on the OLED and Serial; this version does not play a separate chime. It needs a microSD card with an MP3 file, just like the encoder volume example, and uses that example's ESP32-WROOM and ESP32-C6 pin mappings.
+The default cycle is 25 minutes of focus, 5 minutes of short break, and a 15-minute long break after every four completed focus phases. Phases advance automatically. The eyes screen uses `DevLabEyes` from `DevLab_BL` with `setEyesOnly(true)`: happy eyes during focus, a wink while focus is paused, and sleepy eyes during breaks. Only eyes appear; no mouth or sleep symbols are drawn. The eyes change when the timer state changes and remain static between changes to avoid frequent full-screen I2C transfers during audio playback. Transitions appear on the OLED and Serial; this version does not play a separate chime or start BLE. It needs a microSD card with an MP3 file, just like the encoder volume example, and uses that example's ESP32-WROOM and ESP32-C6 pin mappings.
 
-From the directory containing the four repositories:
+From the directory containing the codec library and the three audio forks:
 
 ```sh
 arduino-cli compile --fqbn esp32:esp32:esp32 \
@@ -80,6 +81,8 @@ arduino-cli compile --fqbn esp32:esp32:esp32 \
   --library ./unit_devlab_fork_arduino_libhelix \
   ./unit_devlab_codec_library/examples/player_mp3_uart
 ```
+
+To compile the Pomodoro eyes example, also add `--library ./unit_devlab_bl_library` and use `./unit_devlab_codec_library/examples/player_mp3_oled_encoder_pomodoro` as the sketch path.
 
 ## Credits and license
 

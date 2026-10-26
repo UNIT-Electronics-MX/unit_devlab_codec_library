@@ -9,6 +9,7 @@
 #include <SD.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <DevLabEyes.h>
 #include <UnitDevlabCodecPlayback.h>
 #include <DevLab_AudioSource.h>
 #if defined(CONFIG_IDF_TARGET_ESP32C6)
@@ -157,6 +158,7 @@ TwoWire myWire(0);
 std::atomic<bool> i2cReady{false};
 // All devices run at 100 kHz; do not change the clock while running.
 Adafruit_SSD1306 oled(128, 64, &myWire, -1, I2CSPEED, I2CSPEED);
+DevLabEyes eyes(oled);
 DriverPins my_pins;
 AudioBoard audio_board(AudioDriverES8311, my_pins);
 I2SCodecStream i2s(audio_board);
@@ -215,7 +217,7 @@ class SmoothVolumeStream : public VolumeMeter {
 SmoothVolumeStream musicVolume(i2s);
 AudioPlayer player(source, musicVolume, decoder);
 
-enum class Screen { Player, Songs, Pomodoro };
+enum class Screen { Player, Songs, Pomodoro, Eyes };
 Screen screen = Screen::Player;
 
 enum class PomodoroPhase : uint8_t { Focus, ShortBreak, LongBreak };
@@ -696,8 +698,27 @@ void drawPomodoroTime() {
   lastDraw = millis();
 }
 
+void drawPomodoroEyes() {
+  if (!oledReady) return;
+  DevLabEyes::Emotion emotion = DevLabEyes::SLEEPY;
+  if (pomodoroPhase == PomodoroPhase::Focus) {
+    emotion = pomodoroRunning ? DevLabEyes::HAPPY : DevLabEyes::WINK;
+  }
+  eyes.setEmotion(emotion);
+  eyes.draw();
+  lastDraw = millis();
+}
+
 void updateDisplay() {
   if (!oledReady) return;
+  if (screen == Screen::Eyes) {
+    if (displayDirty && millis() - lastDraw >= 100) {
+      displayDirty.exchange(false);
+      footerDirty.exchange(false);
+      drawPomodoroEyes();
+    }
+    return;
+  }
   if (screen == Screen::Pomodoro) {
     if (displayDirty && millis() - lastDraw >= 100) {
       displayDirty.exchange(false);
@@ -736,7 +757,7 @@ void updateDisplay() {
 }
 
 void singleEncoderClick() {
-  if (screen == Screen::Pomodoro) {
+  if (screen == Screen::Pomodoro || screen == Screen::Eyes) {
     togglePomodoro();
   } else if (screen == Screen::Songs) {
     if (sendControl(ControlType::PlayIndex, menuSelection)) screen = Screen::Player;
@@ -747,7 +768,7 @@ void singleEncoderClick() {
 }
 
 void doubleEncoderClick() {
-  if (screen == Screen::Pomodoro) {
+  if (screen == Screen::Pomodoro || screen == Screen::Eyes) {
     resetPomodoro();
   } else if (screen == Screen::Player) {
     menuSelection = constrain(getUiState().trackIndex, 0, mp3Count - 1);
@@ -761,11 +782,15 @@ void doubleEncoderClick() {
 }
 
 void longEncoderPress() {
-  screen = screen == Screen::Pomodoro ? Screen::Player : Screen::Pomodoro;
+  if (screen == Screen::Pomodoro) screen = Screen::Eyes;
+  else if (screen == Screen::Eyes) screen = Screen::Player;
+  else screen = Screen::Pomodoro;
   clickPending = false;
   displayDirty = true;
   footerDirty = false;
-  Serial.println(screen == Screen::Pomodoro ? "Pomodoro view" : "MP3 player view");
+  Serial.println(screen == Screen::Pomodoro ? "Pomodoro view" :
+                 screen == Screen::Eyes ? "Pomodoro eyes view" :
+                                          "MP3 player view");
 }
 
 void pollEncoder() {
@@ -835,7 +860,8 @@ void pollEncoder() {
       menuSelection = (int32_t)constrain(selected, (int64_t)0,
                                          (int64_t)mp3Count - 1);
       displayDirty = true;
-    } else if (screen == Screen::Pomodoro && !pomodoroRunning &&
+    } else if ((screen == Screen::Pomodoro || screen == Screen::Eyes) &&
+               !pomodoroRunning &&
                pomodoroPhase == PomodoroPhase::Focus &&
                !pressed && !lastEncoderButton) {
       const int nextMinutes = constrain((int)focusMinutes + (int)delta, 1, 60);
@@ -880,7 +906,8 @@ void printHelp() {
   Serial.println("       h0/h1 live OLED volume (h1 active)");
   Serial.println("Encoder: turn for volume; in list view, turn to select a track,");
   Serial.println("         click to pause/select; double-click to open/close list");
-  Serial.println("Pomodoro: hold to open/close; click start/pause; double-click reset");
+  Serial.println("Pomodoro: hold for timer, eyes, and player views");
+  Serial.println("          click start/pause; double-click reset");
   Serial.println("          turn while stopped in focus to set 1-60 minutes");
   Serial.println("          focus 25 min, short break 5 min, long break 15 min after 4");
 }
@@ -1112,6 +1139,7 @@ void setup() {
   if (oledAddress != 0) {
     oledI2cAddress = oledAddress;
     oledReady = oled.begin(SSD1306_SWITCHCAPVCC, oledAddress, false, false);
+    if (oledReady) eyes.setEyesOnly(true);
     Serial.printf("OLED SSD1306 at 0x%02X: %s\n", oledAddress,
                   oledReady ? "OK" : "ERROR");
   } else {
