@@ -44,12 +44,19 @@ void setup() {
 
 | Sketch | Purpose | Additional hardware |
 |---|---|---|
-| `es8311_sine_wave` | Generate a tone to check ES8311 and I2S | None |
+| `es8311_sine_wave` | Generate a tone to check ES8311 and I2S on ESP32-WROOM or ESP32-C6 | None |
 | `player_mp3_volume` | Basic MP3 player with volume control | microSD |
 | `player_mp3_uart` | Control playback over the serial port | microSD |
 | `player_mp3_oled` | MP3 player with display | microSD, OLED, optional encoder |
 | `player_mp3_oled_encoder_volume` | Display and encoder volume control | microSD, OLED, UE0172 encoder |
 | `player_mp3_oled_slider` | Display and slider on a second I2C bus | microSD, OLED, encoder, slider |
+
+The sine wave sketch selects these pins at compile time:
+
+| Board | I2C SDA | I2C SCL | I2S MCLK | I2S BCLK | I2S WS | ES8311 DIN |
+|---|---:|---:|---:|---:|---:|---:|
+| ESP32-WROOM | 21 | 22 | 0 | 4 | 16 | 15 |
+| ESP32-C6 | 22 | 23 | 21 | 3 | 15 | 20 |
 
 Each sketch uses the pin mapping of its DualMCU prototype. Pin assignments may differ between ESP32 and ESP32-C6 variants. Check your board wiring before uploading. All six sketches compiled with ESP32 Arduino core 3.3.1. The encoder volume sketch also compiled for ESP32-C6, and the sine wave sketch compiled for ESP32-S3. Audio playback, shared buses, and controls still need hardware testing.
 

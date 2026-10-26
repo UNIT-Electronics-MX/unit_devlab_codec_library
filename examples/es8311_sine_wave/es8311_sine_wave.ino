@@ -1,17 +1,30 @@
-// Audio output test with ESP32 and the ES8311 codec.
+// Audio output test with ESP32-WROOM or ESP32-C6 and the ES8311 codec.
 #include <DevLab_Codec_ES.h>
 #include <DevLab_AudioTools.h>
 #include "AudioTools/AudioLibs/I2SCodecStream.h"
 
+#if defined(CONFIG_IDF_TARGET_ESP32C6)
+// ESP32-C6 pinout used by the DualMCU MP3 encoder example.
+#define SDAPIN 22
+#define SCLPIN 23
+#define MCLKPIN 21
+#define BCLKPIN 3
+#define WSPIN 15
+#define DOPIN 20  // ESP32-C6 output -> ES8311 DIN
+#elif defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)
+// ESP32-WROOM pinout; keep the existing mapping for identically wired S3 boards.
 #define SDAPIN 21
 #define SCLPIN 22
-#define I2CSPEED 100000
-#define ES8311_ADDR 0x18
-
 #define MCLKPIN 0
 #define BCLKPIN 4
 #define WSPIN 16
-#define DOPIN 15   // ESP32 output -> ES8311 DIN
+#define DOPIN 15  // ESP32 output -> ES8311 DIN
+#else
+#error "This example supports ESP32-WROOM and ESP32-C6"
+#endif
+
+#define I2CSPEED 100000
+#define ES8311_ADDR 0x18
 #define DIPIN -1  // I2S input is unused
 
 AudioInfo audio_info(44100, 2, 16);
