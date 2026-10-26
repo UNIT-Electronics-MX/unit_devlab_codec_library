@@ -1,6 +1,6 @@
-# UNIT DevLab ES8311 codec library
+# UNIT DevLab ES codec library
 
-Arduino library for configuring ES8311 codec pins in UNIT DevLab audio projects. It uses the ES8311 implementation in the UNIT DevLab Audio Driver fork. The MP3 examples also use the UNIT DevLab Audio Tools and LibHelix forks. This library does not copy the codec driver or decoder implementation.
+Arduino library for ES-series codecs in UNIT DevLab audio projects. The current implementation configures ES8311 pins and uses the ES8311 driver in the UNIT DevLab Audio Driver fork. Other ES codecs are not implemented yet. The MP3 examples also use the UNIT DevLab Audio Tools and LibHelix forks. This library does not copy the codec driver or decoder implementation.
 
 ## Required libraries
 
@@ -19,7 +19,7 @@ The unique `DevLab_*.h` headers select these libraries even when the original li
 ## Usage
 
 ```cpp
-#include <DevLab_ES8311.h>
+#include <DevLab_Codec_ES.h>
 
 TwoWire codecWire(0);
 DriverPins codecPins;
@@ -37,6 +37,8 @@ void setup() {
 ```
 
 `configureES8311` registers the pins but does not initialize the codec. `I2SCodecStream::begin()` initializes I2S and `AudioBoard`; do not call `AudioBoard::begin()` before starting the stream. If I2C is already running and shared with an OLED or controls, set `i2c_active=false` in `ES8311Pinout` before registering the pins.
+
+`DevLab_ES8311.h` remains available as a compatibility header for existing sketches.
 
 ## Examples
 
@@ -66,4 +68,4 @@ arduino-cli compile --fqbn esp32:esp32:esp32 \
 
 Examples and pin configuration layer: Cesar Bautista / UNIT Electronics. Audio Driver, Audio Tools, and the LibHelix adaptation are projects by Phil Schatzmann. Helix includes work by RealNetworks and other contributors. Each fork retains its own license. This repository is distributed under GPL-3.0; see `LICENSE`.
 
-The initial revision of this repository contained a copy of `DevLab_BMI323`. That revision remains in Git history. The `main` branch now contains the ES8311 library.
+The initial revision of this repository contained a copy of `DevLab_BMI323`. That revision remains in Git history. The `main` branch now contains the ES codec library, currently supporting ES8311.

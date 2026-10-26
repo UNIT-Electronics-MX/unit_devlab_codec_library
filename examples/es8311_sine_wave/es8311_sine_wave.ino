@@ -1,5 +1,5 @@
 // Audio output test with ESP32 and the ES8311 codec.
-#include <UnitDevlabCodec.h>
+#include <DevLab_Codec_ES.h>
 #include <DevLab_AudioTools.h>
 #include "AudioTools/AudioLibs/I2SCodecStream.h"
 
