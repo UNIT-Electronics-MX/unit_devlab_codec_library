@@ -76,6 +76,6 @@ arduino-cli compile --fqbn esp32:esp32:esp32 \
 
 ## Credits and license
 
-Examples and pin configuration layer: Cesar Bautista / UNIT Electronics. Audio Driver, Audio Tools, and the LibHelix adaptation are projects by Phil Schatzmann. Helix includes work by RealNetworks and other contributors. Each fork retains its own license. This repository is distributed under GPL-3.0; see `LICENSE`.
+ES codec library and example integration: Cesar Bautista / UNIT Electronics. Adrián Rabadán contributed to the initial DualMCU version. Audio Driver, Audio Tools, and the LibHelix adaptation are projects by Phil Schatzmann. Helix includes work by RealNetworks and other contributors. Each fork retains its own license. This repository is distributed under GPL-3.0; see `LICENSE`.
 
 The initial revision of this repository contained a copy of `DevLab_BMI323`. That revision remains in Git history. The `main` branch now contains the ES codec library, currently supporting ES8311.
