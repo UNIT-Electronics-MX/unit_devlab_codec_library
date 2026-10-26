@@ -11,6 +11,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <UnitDevlabCodecPlayback.h>
+#include <DevLab_AudioSource.h>
 
 #define SDAPIN       21
 #define SCLPIN       22
@@ -73,14 +74,14 @@ class AudioSourceSDList : public AudioSource {
   AudioSourceSDList(const char *startPath, const char *ext)
       : startPath(startPath), extension(ext) {}
 
-#if __has_include("AudioTools/Disk/AudioSource.h")
+#if DEVLAB_AUDIO_SOURCE_BEGIN_RETURNS_BOOL
   bool begin() override {
 #else
   void begin() override {
 #endif
     if (paths.empty()) scan(startPath);
     position = 0;
-#if __has_include("AudioTools/Disk/AudioSource.h")
+#if DEVLAB_AUDIO_SOURCE_BEGIN_RETURNS_BOOL
     return true;
 #endif
   }

@@ -16,6 +16,8 @@ The sine wave example needs Audio Driver and Audio Tools. The MP3 examples need 
 
 The unique `DevLab_*.h` headers select these libraries even when the original libraries are installed. The longer `unit_devlab_fork_*.h` headers remain available for existing sketches. Install the forks from GitHub until they are registered in Arduino Library Manager. Accordingly, `library.properties` does not declare automatic dependencies yet.
 
+Use `<DevLab_AudioSourceSD.h>` for SD input, `<DevLab_AudioSource.h>` when extending the base source class, and `<DevLab_CodecMP3Helix.h>` for MP3 decoding. These headers keep Audio Tools' internal file layout out of sketches.
+
 ## Usage
 
 ```cpp
