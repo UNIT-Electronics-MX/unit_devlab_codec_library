@@ -1,4 +1,4 @@
-// Prueba de salida de audio con ESP32 y codec ES8311.
+// Audio output test with ESP32 and the ES8311 codec.
 #include <UnitDevlabCodec.h>
 #include <unit_devlab_fork_audio_tools.h>
 #include "AudioTools/AudioLibs/I2SCodecStream.h"
@@ -11,8 +11,8 @@
 #define MCLKPIN 0
 #define BCLKPIN 4
 #define WSPIN 16
-#define DOPIN 15   // ESP32 -> DIN del ES8311
-#define DIPIN -1  // No se usa la entrada I2S
+#define DOPIN 15   // ESP32 output -> ES8311 DIN
+#define DIPIN -1  // I2S input is unused
 
 AudioInfo audio_info(44100, 2, 16);
 SineWaveGenerator<int16_t> sine_wave(14000);
@@ -28,11 +28,11 @@ bool audio_ready = false;
 void checkCodecI2C() {
   myWire.beginTransmission(ES8311_ADDR);
   const byte result = myWire.endTransmission();
-  Serial.printf("I2C ES8311 (0x%02X): %s (codigo %u)\n",
-                ES8311_ADDR, result == 0 ? "OK" : "sin respuesta", result);
+  Serial.printf("I2C ES8311 (0x%02X): %s (code %u)\n",
+                ES8311_ADDR, result == 0 ? "OK" : "no response", result);
 
   if (result != 0) {
-    Serial.print("Otras direcciones I2C detectadas:");
+    Serial.print("Other detected I2C addresses:");
     bool found = false;
     for (byte address = 1; address < 127; ++address) {
       myWire.beginTransmission(address);
@@ -41,7 +41,7 @@ void checkCodecI2C() {
         found = true;
       }
     }
-    if (!found) Serial.print(" ninguna");
+    if (!found) Serial.print(" none");
     Serial.println();
   }
 }
@@ -56,7 +56,7 @@ int readCodecRegister(byte address) {
 
 void printCodecState() {
   const byte addresses[] = { 0x09, 0x12, 0x31, 0x32, 0xFD, 0xFE };
-  Serial.print("Registros ES8311:");
+  Serial.print("ES8311 registers:");
   for (byte address : addresses) {
     const int value = readCodecRegister(address);
     if (value < 0) {
@@ -74,12 +74,12 @@ void setup() {
   AudioDriverLogger.begin(Serial, AudioDriverLogLevel::Warning);
   delay(2000);
 
-  Serial.println("Iniciando prueba ES8311...");
+  Serial.println("Starting ES8311 test...");
   const unit_devlab::ES8311Pinout codecPins{
       SDAPIN, SCLPIN, MCLKPIN, BCLKPIN, WSPIN, DOPIN, DIPIN,
       ES8311_ADDR, I2CSPEED};
   if (!unit_devlab::configureES8311(my_pins, codecPins, myWire)) {
-    Serial.println("ERROR: pines ES8311 invalidos o ya registrados");
+    Serial.println("ERROR: invalid ES8311 pins or pins already registered");
     return;
   }
 
@@ -88,25 +88,25 @@ void setup() {
   config.is_master = true;
   config.sd_active = false;
 
-  // I2SCodecStream inicializa tanto los pines como el codec y el bus I2S.
+  // I2SCodecStream initializes the pins, codec, and I2S bus.
   const bool stream_ok = i2s_out_stream.begin(config);
-  Serial.printf("Inicio de codec e I2S: %s\n", stream_ok ? "OK" : "ERROR");
+  Serial.printf("Codec and I2S startup: %s\n", stream_ok ? "OK" : "ERROR");
   checkCodecI2C();
   if (!stream_ok) return;
 
   const bool volume_ok = i2s_out_stream.setVolume(0.7f);
   const bool unmute_ok = i2s_out_stream.setMute(false);
-  Serial.printf("Volumen 70%%: %s, quitar mute: %s\n",
+  Serial.printf("Volume 70%%: %s, unmute: %s\n",
                 volume_ok ? "OK" : "ERROR", unmute_ok ? "OK" : "ERROR");
   printCodecState();
 
   if (!sound_stream.begin(audio_info)) {
-    Serial.println("Generador senoidal: ERROR");
+    Serial.println("Sine wave generator: ERROR");
     return;
   }
   sine_wave.setFrequency(N_B4);  // 493.88 Hz
   audio_ready = true;
-  Serial.println("Generador senoidal: OK");
+  Serial.println("Sine wave generator: OK");
 }
 
 void loop() {
@@ -119,7 +119,7 @@ void loop() {
   static unsigned long last_report = millis();
   bytes_sent += copier.copy();
   if (millis() - last_report >= 1000) {
-    Serial.printf("Datos enviados a I2S: %u bytes/s\n", (unsigned int)bytes_sent);
+    Serial.printf("Data sent to I2S: %u bytes/s\n", (unsigned int)bytes_sent);
     bytes_sent = 0;
     last_report = millis();
   }

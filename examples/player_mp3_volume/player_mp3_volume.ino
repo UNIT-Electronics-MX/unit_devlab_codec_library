@@ -5,41 +5,41 @@
 #include "AudioTools/AudioLibs/AudioSourceSD.h"
 #endif
 
-// 📂 SD y formato
+// SD card and file format
 const char* startFilePath = "/";
 const char* ext = "mp3";
 AudioSourceSD source(startFilePath, ext);
 
-// 🔈 Decoder
+// Decoder
 MP3DecoderHelix decoder;
 
-// 🧠 Pines I2C y I2S
+// I2C and I2S pins
 #define SDAPIN     21
 #define SCLPIN     22
 #define ES8311_ADDR 0x18
 #define I2CSPEED   100000
 
-#define MCLKPIN    0   // Usa -1 si no tienes MCLK
+#define MCLKPIN    0   // Use -1 if MCLK is not connected
 #define BCLKPIN    17
 #define WSPIN      16
-#define DOPIN      4    // DAT_OUT del ESP32 -> DIN del ES8311
-#define DIPIN      -1   // No se usa entrada
+#define DOPIN      4    // ESP32 data output -> ES8311 DIN
+#define DIPIN      -1   // Input is unused
 
-// 📌 Objetos para el codec
+// Codec objects
 DriverPins my_pins;
 AudioBoard audio_board(AudioDriverES8311, my_pins);
-I2SCodecStream i2s(audio_board);  // <- este sí usa el codec ES8311
+I2SCodecStream i2s(audio_board);  // Uses the ES8311 codec
 
-// 🎵 Reproductor
+// Player
 AudioPlayer player(source, i2s, decoder);
 
-// 🔧 I2C
+// I2C
 TwoWire myWire = TwoWire(0);
 
-// 🔊 Volumen actual (entre 0.0 y 1.0)
+// Current volume (0.0 to 1.0)
 float currentVolume = 0.02;
 
-// 📋 Log de metadatos (opcional)
+// Optional metadata logging
 void printMetaData(MetaDataType type, const char* str, int len) {
   Serial.print("==> ");
   Serial.print(toStr(type));
@@ -51,51 +51,51 @@ void setup() {
   Serial.begin(115200);
   AudioLogger::instance().begin(Serial, AudioLogger::Info);
   delay(1000);
-  Serial.println("Inicializando...");
+  Serial.println("Initializing...");
 
-  // Configurar pines I2C y I2S para codec
+  // Configure codec I2C and I2S pins
   const unit_devlab::ES8311Pinout codecPins{
       SDAPIN, SCLPIN, MCLKPIN, BCLKPIN, WSPIN, DOPIN, DIPIN,
       ES8311_ADDR, I2CSPEED};
   if (!unit_devlab::configureES8311(my_pins, codecPins, myWire)) {
-    Serial.println("ERROR: pines ES8311 invalidos o ya registrados");
+    Serial.println("ERROR: invalid ES8311 pins or pins already registered");
     return;
   }
-  // I2SCodecStream inicializa los pines y el codec ES8311.
+  // I2SCodecStream initializes the pins and ES8311 codec.
   auto cfg = i2s.defaultConfig(TX_MODE);
   if (!i2s.begin(cfg)) {
-    Serial.println("ERROR: no se pudo iniciar ES8311/I2S");
+    Serial.println("ERROR: could not start ES8311/I2S");
     return;
   }
 
-  // Configurar y arrancar el reproductor
+  // Configure and start the player
   player.setMetadataCallback(printMetaData);
   player.begin();
-  player.setVolume(currentVolume); // ⬅️ volumen inicial al 10%
+  player.setVolume(currentVolume); // initial volume at 10%
 
-  Serial.println("Listo para reproducir MP3 desde microSD con ES8311");
-  Serial.println("Escribe 'v0.5' para subir el volumen a 50%");
+  Serial.println("Ready to play MP3 from microSD through ES8311");
+  Serial.println("Enter 'v0.5' to set the volume to 50%");
 }
 
 void loop() {
-  // Reproducción continua
+  // Continuous playback
   player.copy();
 
-  // Leer del Serial para comandos
+  // Read serial commands
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
     input.trim();
 
-    // Cambiar volumen: ejemplo v0.3
+    // Change volume: for example, v0.3
     if (input.startsWith("v")) {
       float v = input.substring(1).toFloat();
       if (v >= 0.0 && v <= 1.0) {
         currentVolume = v;
         player.setVolume(currentVolume);
-        Serial.print("🔊 Volumen actualizado a: ");
+        Serial.print("Volume updated to: ");
         Serial.println(currentVolume);
       } else {
-        Serial.println("⚠️ Valor inválido. Usa v0.0 a v1.0 (ej. v0.3)");
+        Serial.println("Invalid value. Use v0.0 to v1.0 (e.g. v0.3)");
       }
     }
   }

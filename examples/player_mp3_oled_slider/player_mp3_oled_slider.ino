@@ -1,9 +1,9 @@
-// Reproductor MP3 por microSD con ES8311 y OLED SSD1306 128x64.
-// Variante: slider en nucleo 0 y barra LED con protocolo en buffer si existe.
-// ES8311 solo en I2C0: SDA=21, SCL=22.
-// OLED, encoder UE0172 (0x31) y slider WS12xx (0x24) en I2C1:
-// SDA=25, SCL=26. Mover fisicamente la OLED a esos pines.
-// La interfaz corre en el nucleo 0; el audio conserva el loop del nucleo 1.
+// MP3 player from microSD with ES8311 and a 128x64 SSD1306 OLED.
+// Variant: slider on core 0 and buffered LED bar protocol when available.
+// ES8311 only on I2C0: SDA=21, SCL=22.
+// OLED, UE0172 encoder (0x31), and WS12xx slider (0x24) on I2C1:
+// SDA=25, SCL=26. Wire the OLED to those pins.
+// The UI runs on core 0; audio remains in the core 1 loop.
 #include <stdlib.h>
 #include <atomic>
 #include <vector>
@@ -19,11 +19,11 @@
 #define MCLKPIN       0
 #define BCLKPIN       4
 #define WSPIN        16
-#define DOPIN        15  // ESP32 -> DSDIN del ES8311
+#define DOPIN        15  // ESP32 output -> ES8311 DSDIN
 #define DIPIN        -1
 
-// 0: encoder junto al ES8311 en 21/22; OLED y slider en 25/26.
-// 1: encoder junto a OLED y slider en 25/26 (configuracion normal).
+// 0: encoder with ES8311 on 21/22; OLED and slider on 25/26.
+// 1: encoder with OLED and slider on 25/26 (normal configuration).
 #ifndef ENCODER_OWN_I2C
 #define ENCODER_OWN_I2C 1
 #endif
@@ -53,21 +53,21 @@ constexpr uint8_t kSliderShowCommand = 0xB3;
 constexpr uint8_t kSliderClearCommand = 0xB2;
 constexpr uint8_t kSliderBrightnessCommand = 0xB5;
 constexpr uint8_t kSliderPixelCount = 16;
-// Menor corriente de los NeoPixels para reducir ruido en la alimentacion.
+// Lower NeoPixel current to reduce power supply noise.
 constexpr uint8_t kSliderBrightness = 24;
-// El ejemplo WS12xx adjunto lee el ADC 2 ms despues del comando.
+// The WS12xx example reads the ADC 2 ms after the command.
 constexpr unsigned long kSliderReadWaitMs = 2;
 constexpr unsigned long kSliderSampleMs = 100;
 constexpr unsigned long kSliderRetryMs = 2000;
 constexpr unsigned long kVolumeDisplayMs = 2500;
 constexpr unsigned long kDiscoFrameMs = 85;
-// Evita transferencias OLED periodicas durante la reproduccion.
+// Avoid periodic OLED transfers during playback.
 constexpr bool kScrollTitleDuringPlayback = false;
-// 12 x 512 muestras dan ~139 ms de margen a 44.1 kHz estereo.
+// 12 x 512 samples provide about 139 ms of headroom at 44.1 kHz stereo.
 constexpr int kAudioDmaBufferCount = 12;
 
-// AudioSourceSD recorre toda la microSD cada vez que se elige una pista.
-// Esta fuente la indexa una sola vez y guarda las rutas en RAM.
+// AudioSourceSD scans the entire microSD each time a track is selected.
+// This source indexes the card once and keeps paths in RAM.
 class AudioSourceSDList : public AudioSource {
  public:
   AudioSourceSDList(const char *startPath, const char *ext)
@@ -141,7 +141,7 @@ class AudioSourceSDList : public AudioSource {
 
 TwoWire myWire(0);
 TwoWire controlWire(1);
-// Adafruit restaura el reloj al valor clkAfter tras cada refresco.
+// Adafruit restores the clock to clkAfter after each refresh.
 Adafruit_SSD1306 oled(128, 64, &controlWire, -1,
                      kControlI2CSpeed, kControlI2CSpeed);
 DriverPins my_pins;
@@ -150,21 +150,21 @@ I2SCodecStream i2s(audio_board);
 AudioSourceSDList source(startFilePath, extension);
 MP3DecoderHelix decoder;
 std::atomic<uint8_t> musicPeakLevel{0};
-// La animacion de audio es opcional; el indicador de volumen sigue activo.
+// Audio animation is optional; the volume indicator remains active.
 std::atomic<bool> sliderDiscoEnabled{false};
 
-// Volumen pedido (0.0-1.0); MusicLevelMeter se acerca a el muestra a muestra.
+// Requested volume (0.0-1.0); MusicLevelMeter approaches it sample by sample.
 std::atomic<float> targetGain{0.8f};
 
-// Aplica el volumen y mide el PCM que realmente sale al codec.
+// Apply volume and measure the PCM actually sent to the codec.
 class MusicLevelMeter : public VolumeMeter {
  public:
   using VolumeMeter::write;
   explicit MusicLevelMeter(AudioStream &output) : VolumeMeter(output) {}
 
   size_t write(const uint8_t *data, size_t len) override {
-    // Suavizado exponencial: incluso un cambio pequeno tarda ~20 ms.
-    // La rampa anterior completaba un cambio del 2% en ~1 ms.
+    // Exponential smoothing: even a small change takes about 20 ms.
+    // The previous ramp completed a 2% change in about 1 ms.
     static constexpr float kGainAlpha = 1.0f / 882.0f;
     const int16_t *input = reinterpret_cast<const int16_t *>(data);
     const size_t frames = len / 4;
@@ -191,7 +191,7 @@ class MusicLevelMeter : public VolumeMeter {
 
   void writeAll(const uint8_t *data, size_t len) {
     while (len > 0) {
-      // Sin animacion, enviar PCM directo y omitir el calculo del medidor.
+      // Without animation, send PCM directly and skip meter calculations.
       const size_t written = sliderDiscoEnabled.load(std::memory_order_relaxed)
           ? VolumeMeter::write(data, len) : p_out->write(data, len);
       if (written == 0) return;
@@ -201,7 +201,7 @@ class MusicLevelMeter : public VolumeMeter {
   }
 
   void updatePeak() {
-    // Umbrales logaritmicos: los pasajes suaves tambien mueven la barra.
+    // Logarithmic thresholds let quiet passages move the bar too.
     static constexpr float kPeaks[16] = {
         0.004f, 0.006f, 0.009f, 0.013f,
         0.019f, 0.027f, 0.038f, 0.054f,
@@ -230,16 +230,16 @@ bool isPaused = false;
 bool isMuted = false;
 std::atomic<bool> displayDirty{true};
 std::atomic<bool> footerDirty{false};
-// Interruptores de diagnostico: se cambian desde Serial en el nucleo de audio
-// y los consulta la tarea de interfaz antes de cada acceso I2C.
+// Diagnostic switches are changed over Serial on the audio core
+// and checked by the UI task before each I2C access.
 std::atomic<bool> encoderPollingEnabled{true};
 std::atomic<bool> sliderPollingEnabled{true};
-// g0 deja activo el I2C del slider y detiene solo sus cambios de ganancia.
+// g0 keeps slider I2C active and stops only its gain changes.
 std::atomic<bool> sliderVolumeEnabled{true};
-// l0 permite aislar las escrituras LED sin perder la lectura ADC del slider.
+// l0 isolates LED writes while keeping slider ADC reads.
 std::atomic<bool> sliderLedsEnabled{true};
 std::atomic<bool> oledRefreshEnabled{true};
-// El porcentaje OLED se actualiza en una region pequena del bus de controles.
+// Update the OLED percentage in a small region on the control bus.
 std::atomic<bool> oledVolumeLiveEnabled{true};
 float currentVolume = 0.8f;
 bool encoderAvailable = false;
@@ -370,7 +370,7 @@ bool detectEncoder() {
   if (encoderAvailable) {
     encoderSynced = false;
     encoderFailures = 0;
-    Serial.println("Encoder UE0172 detectado en 0x31");
+    Serial.println("UE0172 encoder detected at 0x31");
   }
   return encoderAvailable;
 }
@@ -379,7 +379,7 @@ bool writeSliderByte(uint8_t value) {
   controlWire.beginTransmission(kSliderAddress);
   controlWire.write(value);
   if (controlWire.endTransmission() != 0) return false;
-  delay(3);  // Espacio entre comandos cortos de configuracion o Show.
+  delay(3);  // Gap between short configuration or Show commands.
   return true;
 }
 
@@ -395,7 +395,7 @@ bool setSliderPixel(uint8_t position, bool on, bool disco) {
                                              (position < 10U ? 255U :
                                               (position < 14U ? 160U : 0U)));
   const uint8_t blue = on && disco ? kDiscoColors[color][2] : 0;
-  // Ambos comandos aceptan todo el pixel en una sola transaccion I2C.
+  // Both commands accept the entire pixel in one I2C transaction.
   controlWire.beginTransmission(kSliderAddress);
   controlWire.write(sliderBufferedPixels ? kSliderPixelBufferedCommand :
                                            kSliderPixelCommand);
@@ -407,7 +407,7 @@ bool setSliderPixel(uint8_t position, bool on, bool disco) {
   if (sliderBufferedPixels) {
     sliderPixelsPendingShow = true;
   } else {
-    delay(3);  // 0xB0 actualiza el LED inmediatamente.
+    delay(3);  // 0xB0 updates the LED immediately.
   }
   return true;
 }
@@ -417,12 +417,12 @@ bool detectSlider() {
   controlWire.beginTransmission(kSliderAddress);
   controlWire.write(kSliderIdCommand);
   if (controlWire.endTransmission() != 0) return false;
-  delay(5);  // Tiempo de preparacion indicado por el ejemplo del WS12xx.
+  delay(5);  // Setup time specified by the WS12xx example.
   if (controlWire.requestFrom(kSliderAddress, (uint8_t)2) != 2) return false;
   id[0] = controlWire.read();
   id[1] = controlWire.read();
   if (id[0] != 0x00 || id[1] != 0x04) return false;
-  // Una version no legible usa el protocolo antiguo, sin bloquear el audio.
+  // An unreadable version uses the old protocol without blocking audio.
   uint8_t version[2];
   controlWire.beginTransmission(kSliderAddress);
   controlWire.write(kSliderVersionCommand);
@@ -459,8 +459,8 @@ bool detectSlider() {
   sliderNextSampleAt = millis();
   sliderNextVisualAt = millis();
   lastVolumeActivityMs.store(millis(), std::memory_order_relaxed);
-  Serial.printf("Slider WS12xx detectado en 0x24; LED %s\n",
-                sliderBufferedPixels ? "en buffer" : "modo compatible");
+  Serial.printf("WS12xx slider detected at 0x24; LED %s\n",
+                sliderBufferedPixels ? "buffered" : "compatibility mode");
   return true;
 }
 
@@ -469,7 +469,7 @@ void disconnectSlider() {
   sliderReadPending = false;
   sliderPixelsPendingShow = false;
   sliderNextProbeAt = millis() + kSliderRetryMs;
-  Serial.println("Slider desconectado; el reproductor continua");
+  Serial.println("Slider disconnected; playback continues");
 }
 
 void sliderReadFailed() {
@@ -484,7 +484,7 @@ void pollSlider() {
     if ((int32_t)(now - sliderNextProbeAt) >= 0) {
       if (!detectSlider()) {
         sliderPollingEnabled.store(false);
-        Serial.println("WS12xx no responde; reintentos detenidos. Envia s1 para probar otra vez");
+        Serial.println("WS12xx unresponsive; retries stopped. Send s1 to retry");
       }
     }
     return;
@@ -503,7 +503,7 @@ void pollSlider() {
       sliderReadFailed();
       return;
     }
-    // Filtra ruido del ADC sin retrasar los movimientos grandes del slider.
+    // Filter ADC noise without delaying large slider movements.
     const int32_t rawQ4 = (int32_t)raw << 4;
     if (raw <= 32U || raw >= 4063U) {
       sliderFilteredAdcQ4 = raw <= 32U ? 0 : 4095 << 4;
@@ -547,8 +547,8 @@ void pollSlider() {
     return;
   }
 
-  // El firmware nuevo agrupa hasta cuatro pixeles y los muestra una vez.
-  // El anterior mantiene un pixel por vuelta para atender el encoder.
+  // New firmware batches up to four pixels before displaying them.
+  // Old firmware updates one pixel per iteration to keep serving the encoder.
   if (!sliderLedsEnabled.load()) return;
   if (!sliderLedsConfigured) {
     if (!writeSliderByte(kSliderBrightnessCommand) ||
@@ -633,7 +633,7 @@ String fileTitle(const String &path) {
     if (suffix == ".mp3") result.remove(result.length() - 4);
   }
   result.replace('_', ' ');
-  return result.length() ? result : "Sin titulo";
+  return result.length() ? result : "Untitled";
 }
 
 void syncTrack() {
@@ -644,7 +644,7 @@ void syncTrack() {
   songTitle = fileTitle(currentFile);
   songArtist = "";
   publishUiState();
-  Serial.print("Reproduciendo: ");
+  Serial.print("Playing: ");
   Serial.println(currentFile);
 }
 
@@ -663,13 +663,13 @@ void onMetadata(MetaDataType type, const char *value, int length) {
   publishUiState();
 }
 
-// Envia solo las columnas modificadas del buffer SSD1306. display() enviaria
-// los 1024 bytes de la pantalla y produce el ruido audible al cambiar volumen.
+// Send only changed columns from the SSD1306 buffer. display() would send
+// all 1024 screen bytes and cause audible noise when changing volume.
 bool flushOledRegion(uint8_t firstColumn, uint8_t lastColumn,
                      uint8_t firstPage, uint8_t lastPage) {
   if (!oledReady || oledI2cAddress == 0) return false;
   controlWire.beginTransmission(oledI2cAddress);
-  controlWire.write((uint8_t)0x00);  // Comandos SSD1306.
+  controlWire.write((uint8_t)0x00);  // SSD1306 commands.
   controlWire.write((uint8_t)SSD1306_COLUMNADDR);
   controlWire.write(firstColumn);
   controlWire.write(lastColumn);
@@ -683,7 +683,7 @@ bool flushOledRegion(uint8_t firstColumn, uint8_t lastColumn,
     uint8_t column = firstColumn;
     while (column <= lastColumn) {
       controlWire.beginTransmission(oledI2cAddress);
-      controlWire.write((uint8_t)0x40);  // Datos de imagen.
+      controlWire.write((uint8_t)0x40);  // Image data.
       uint8_t sent = 0;
       while (column <= lastColumn && sent < 28) {
         controlWire.write(buffer[page * 128U + column]);
@@ -709,10 +709,10 @@ void drawPlayerFooter() {
   if (statusChanged) {
     oled.fillRect(0, 48, 36, 16, SSD1306_BLACK);
     oled.setCursor(0, 53);
-    oled.print(state.muted ? "MUTE" : (state.paused ? "PAUSA" : "PLAY"));
+    oled.print(state.muted ? "MUTE" : (state.paused ? "PAUSE" : "PLAY"));
     if (!flushOledRegion(0, 35, 6, 7)) {
       oledRefreshEnabled.store(false);
-      Serial.println("OLED sin respuesta; refresco detenido");
+      Serial.println("OLED unresponsive; refresh stopped");
       return;
     }
     lastFooterPaused = state.paused;
@@ -725,7 +725,7 @@ void drawPlayerFooter() {
     oled.print('%');
     if (!flushOledRegion(72, 101, 6, 7)) {
       oledRefreshEnabled.store(false);
-      Serial.println("OLED sin respuesta; refresco detenido");
+      Serial.println("OLED unresponsive; refresh stopped");
       return;
     }
     lastFooterVolume = state.volumePercent;
@@ -759,7 +759,7 @@ void drawPlayer() {
     oled.print("microSD");
   }
   oled.setCursor(0, 53);
-  oled.print(state.muted ? "MUTE" : (state.paused ? "PAUSA" : "PLAY"));
+  oled.print(state.muted ? "MUTE" : (state.paused ? "PAUSE" : "PLAY"));
   oled.setCursor(42, 53);
   oled.print("Vol:");
   oled.setCursor(72, 53);
@@ -781,7 +781,7 @@ void drawSongMenu() {
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
   oled.setCursor(0, 0);
-  oled.print("CANCIONES ");
+  oled.print("TRACKS ");
   oled.print(menuSelection + 1);
   oled.print("/");
   oled.print(mp3Count);
@@ -841,10 +841,10 @@ void doubleEncoderClick() {
   if (screen == Screen::Player) {
     menuSelection = constrain(getUiState().trackIndex, 0, mp3Count - 1);
     screen = Screen::Songs;
-    Serial.println("Menu de canciones");
+    Serial.println("Track list");
   } else {
     screen = Screen::Player;
-    Serial.println("Reproductor");
+    Serial.println("Player");
   }
   displayDirty = true;
 }
@@ -856,7 +856,7 @@ void pollEncoder() {
       lastEncoderProbe = now;
       if (!detectEncoder()) {
         encoderPollingEnabled.store(false);
-        Serial.println("UE0172 no responde; reintentos detenidos. Envia e1 para probar otra vez");
+        Serial.println("UE0172 unresponsive; retries stopped. Send e1 to retry");
       }
     }
     return;
@@ -872,7 +872,7 @@ void pollEncoder() {
       encoderAvailable = false;
       encoderSynced = false;
       lastEncoderProbe = now;
-      Serial.println("Encoder desconectado; el reproductor continua");
+      Serial.println("Encoder disconnected; playback continues");
     }
     return;
   }
@@ -896,7 +896,7 @@ void pollEncoder() {
   const int64_t delta = (int64_t)position - lastEncoderPosition;
   lastEncoderPosition = position;
   if (pressed && !lastEncoderButton) buttonTurned = false;
-  // Un salto grande suele indicar que el encoder se reinicio.
+  // A large jump usually means the encoder restarted.
   if (delta >= -20 && delta <= 20 && delta != 0) {
     clickPending = false;
     if (pressed) {
@@ -907,7 +907,7 @@ void pollEncoder() {
                                          (int64_t)mp3Count - 1);
       displayDirty = true;
     } else {
-      // En la pantalla principal, girar cambia a la siguiente/anterior pista.
+      // On the main screen, turning selects the next or previous track.
       const int32_t next = (int32_t)(((int64_t)getUiState().trackIndex + delta + mp3Count) % mp3Count);
       sendControl(ControlType::PlayIndex, next);
     }
@@ -929,15 +929,15 @@ void pollEncoder() {
 }
 
 void printHelp() {
-  Serial.println("Comandos: v0.0-v1.0 volumen, p pausa, r reanuda,");
-  Serial.println("          n siguiente, b anterior, m mute, u unmute,");
-  Serial.println("          d diagnostico audio/I2C, f lista MP3, ? ayuda");
-  Serial.println("Pruebas: e0/e1 encoder, s0/s1 slider I2C, g0/g1 volumen slider,");
-  Serial.println("         l0/l1 barra LED, a0/a1 animacion, o0/o1 OLED,");
-  Serial.println("         h0/h1 volumen OLED en vivo (h1 activo)");
-  Serial.println("Encoder: girar pista/lista, clic pausa/seleccion,");
-  Serial.println("         doble clic abre/cierra lista");
-  Serial.println("Slider WS12xx: volumen 0-100%; barra LED fija y brillo bajo");
+  Serial.println("Commands: v0.0-v1.0 volume, p pause, r resume,");
+  Serial.println("          n next, b previous, m mute, u unmute,");
+  Serial.println("          d audio/I2C diagnostics, f MP3 list, ? help");
+  Serial.println("Tests: e0/e1 encoder, s0/s1 slider I2C, g0/g1 slider volume,");
+  Serial.println("       l0/l1 LED bar, a0/a1 animation, o0/o1 OLED,");
+  Serial.println("       h0/h1 live OLED volume (h1 active)");
+  Serial.println("Encoder: turn to change track/list, click to pause/select,");
+  Serial.println("         double-click to open/close list");
+  Serial.println("WS12xx slider: volume 0-100%; static LED bar at low brightness");
 }
 
 void processCommand(const char *command) {
@@ -953,13 +953,13 @@ void processCommand(const char *command) {
         name = "Slider";
       } else if (command[0] == 'g') {
         sliderVolumeEnabled.store(enabled);
-        name = "Volumen del slider";
+        name = "Slider volume";
       } else if (command[0] == 'l') {
         sliderLedsEnabled.store(enabled);
-        name = "Barra LED";
+        name = "LED bar";
       } else if (command[0] == 'a') {
         sliderDiscoEnabled.store(enabled);
-        name = "Animacion LED";
+        name = "LED animation";
       } else if (command[0] == 'o') {
         oledRefreshEnabled.store(enabled);
         if (enabled) displayDirty = true;
@@ -967,10 +967,10 @@ void processCommand(const char *command) {
       } else if (command[0] == 'h') {
         oledVolumeLiveEnabled.store(enabled);
         if (enabled) footerDirty = true;
-        name = "Volumen OLED en vivo";
+        name = "Live OLED volume";
       }
       if (name != nullptr) {
-        Serial.printf("%s: %s\n", name, enabled ? "activo" : "detenido");
+        Serial.printf("%s: %s\n", name, enabled ? "active" : "stopped");
         return;
       }
     }
@@ -979,20 +979,20 @@ void processCommand(const char *command) {
     char *end = nullptr;
     float volume = strtof(command + 1, &end);
     if (end == command + 1 || *end != '\0' || volume < 0.0f || volume > 1.0f) {
-      Serial.println("Volumen invalido. Usa v0.0 a v1.0");
+      Serial.println("Invalid volume. Use v0.0 to v1.0");
       return;
     }
     currentVolume = volume;
     isMuted = false;
     targetGain.store(currentVolume);
     lastVolumeActivityMs.store(millis(), std::memory_order_relaxed);
-    Serial.printf("Volumen: %d%%\n", (int)(volume * 100.0f + 0.5f));
+    Serial.printf("Volume: %d%%\n", (int)(volume * 100.0f + 0.5f));
   } else if (strcmp(command, "p") == 0) {
     isPaused = true;
-    Serial.println("Pausa");
+    Serial.println("Paused");
   } else if (strcmp(command, "r") == 0) {
     isPaused = false;
-    Serial.println("Reproduciendo");
+    Serial.println("Playing");
   } else if (strcmp(command, "n") == 0) {
     if (!player.next()) player.setIndex(0);
     syncTrack();
@@ -1011,19 +1011,19 @@ void processCommand(const char *command) {
     Serial.printf("I2C0=%lu Hz, I2C1=%lu Hz\n",
                   (unsigned long)myWire.getClock(),
                   (unsigned long)controlWire.getClock());
-    Serial.printf("Audio: llamadas=%lu, sin datos=%lu, espera maxima=%lu us, copia maxima=%lu us\n",
+    Serial.printf("Audio: calls=%lu, no data=%lu, max wait=%lu us, max copy=%lu us\n",
                   (unsigned long)audioCopyCalls,
                   (unsigned long)audioEmptyCopies,
                   (unsigned long)maxAudioLoopGapUs,
                   (unsigned long)maxAudioCopyTimeUs);
-    Serial.printf("Consultas: encoder=%d, slider=%d, LED=%d, OLED=%d\n",
+    Serial.printf("Polling: encoder=%d, slider=%d, LED=%d, OLED=%d\n",
                   (int)encoderPollingEnabled.load(),
                   (int)sliderPollingEnabled.load(),
                   (int)sliderLedsEnabled.load(),
                   (int)oledRefreshEnabled.load());
-    Serial.printf("Animacion LED=%d\n", (int)sliderDiscoEnabled.load());
-    Serial.printf("Volumen por slider=%d\n", (int)sliderVolumeEnabled.load());
-    Serial.printf("Volumen OLED en vivo=%d\n", (int)oledVolumeLiveEnabled.load());
+    Serial.printf("LED animation=%d\n", (int)sliderDiscoEnabled.load());
+    Serial.printf("Slider volume=%d\n", (int)sliderVolumeEnabled.load());
+    Serial.printf("Live OLED volume=%d\n", (int)oledVolumeLiveEnabled.load());
     audioCopyCalls = 0;
     audioEmptyCopies = 0;
     maxAudioLoopGapUs = 0;
@@ -1036,7 +1036,7 @@ void processCommand(const char *command) {
   } else if (strcmp(command, "?") == 0) {
     printHelp();
   } else if (command[0] != '\0') {
-    Serial.println("Comando desconocido; usa ? para ayuda");
+    Serial.println("Unknown command; use ? for help");
   }
   const bool footerOnly = command[0] == 'v' || strcmp(command, "p") == 0 ||
                           strcmp(command, "r") == 0 ||
@@ -1055,12 +1055,12 @@ void handleControl() {
         isPaused = false;
         syncTrack();
       } else {
-        Serial.println("No se pudo abrir la cancion");
+        Serial.println("Could not open track");
       }
       break;
     case ControlType::TogglePause:
       isPaused = !isPaused;
-      Serial.println(isPaused ? "Pausa" : "Reproduciendo");
+      Serial.println(isPaused ? "Paused" : "Playing");
       break;
     case ControlType::SetVolume:
       currentVolume = constrain(command.value, 0, 100) / 100.0f;
@@ -1119,9 +1119,9 @@ void readSerialCommands() {
   }
 }
 
-// El driver I2C del core 3.x reserva su interrupcion en el nucleo que llama
-// a begin(). Si se inicia desde setup() (nucleo 1), cada transaccion del
-// encoder, slider y OLED interrumpe al audio; por eso se inician en el nucleo 0.
+// In core 3.x, the I2C driver assigns its interrupt to the core that calls
+// begin(). If started in setup() (core 1), every transaction from the
+// encoder, slider, and OLED interrupts audio; start them on core 0.
 void beginI2CTask(void *caller) {
   myWire.begin(SDAPIN, SCLPIN);
   myWire.setClock(I2CSPEED);
@@ -1137,7 +1137,7 @@ bool beginI2CBusesOnCore0() {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     return true;
   } else {
-    // No iniciar I2C en el nucleo de audio si falla la tarea de interfaz.
+    // Do not start I2C on the audio core if the UI task fails.
     return false;
   }
 }
@@ -1149,51 +1149,51 @@ void setup() {
   delay(1000);
 
   if (!beginI2CBusesOnCore0()) {
-    Serial.println("Error al iniciar I2C en nucleo 0");
+    Serial.println("Could not start I2C on core 0");
     return;
   }
   controlWire.setTimeOut(kI2CTimeoutMs);
-  Serial.printf("OLED y controles en I2C1: SDA=%d SCL=%d, %lu Hz\n",
+  Serial.printf("OLED and controls on I2C1: SDA=%d SCL=%d, %lu Hz\n",
                 ENCODER_SDAPIN, ENCODER_SCLPIN,
                 (unsigned long)kControlI2CSpeed);
 #if ENCODER_OWN_I2C
-  Serial.println("OLED, UE0172 y WS12xx en I2C1");
+  Serial.println("OLED, UE0172, and WS12xx on I2C1");
 #else
   myWire.setTimeOut(kI2CTimeoutMs);
-  Serial.println("UE0172 en I2C0; OLED y WS12xx en I2C1");
+  Serial.println("UE0172 on I2C0; OLED and WS12xx on I2C1");
 #endif
   const uint8_t oledAddress = findOledAddress();
   if (oledAddress != 0) {
     oledI2cAddress = oledAddress;
     oledReady = oled.begin(SSD1306_SWITCHCAPVCC, oledAddress, false, false);
-    Serial.printf("OLED SSD1306 en 0x%02X: %s\n", oledAddress,
+    Serial.printf("OLED SSD1306 at 0x%02X: %s\n", oledAddress,
                   oledReady ? "OK" : "ERROR");
   } else {
-    Serial.println("OLED no encontrada en 0x3C ni 0x3D");
+    Serial.println("OLED not found at 0x3C or 0x3D");
   }
-  showMessage("Iniciando...");
+  showMessage("Starting...");
   lastEncoderProbe = millis();
   bool encoderFound = detectEncoder();
   if (!encoderFound) {
     encoderPollingEnabled.store(false);
-    Serial.println("Encoder opcional no detectado; envia e1 para reintentar");
+    Serial.println("Optional encoder not found; send e1 to retry");
   }
   if (!detectSlider()) {
     sliderPollingEnabled.store(false);
-    Serial.println("Slider opcional no detectado; envia s1 para reintentar");
+    Serial.println("Optional slider not found; send s1 to retry");
   }
 
-  Serial.printf("Montando microSD con CS=%d...\n", sdChipSelect);
+  Serial.printf("Mounting microSD with CS=%d...\n", sdChipSelect);
   if (!SD.begin(sdChipSelect) || SD.cardType() == CARD_NONE) {
-    showMessage("Error microSD");
+    showMessage("microSD error");
     return;
   }
-  showMessage("Leyendo microSD...");
+  showMessage("Reading microSD...");
   source.begin();
   mp3Count = source.size();
-  Serial.printf("Archivos .mp3 encontrados: %ld\n", mp3Count);
+  Serial.printf(".mp3 files found: %ld\n", mp3Count);
   if (mp3Count == 0) {
-    showMessage("No hay archivos MP3");
+    showMessage("No MP3 files found");
     return;
   }
 
@@ -1201,7 +1201,7 @@ void setup() {
       SDAPIN, SCLPIN, MCLKPIN, BCLKPIN, WSPIN, DOPIN, DIPIN,
       ES8311_ADDR, I2CSPEED};
   if (!unit_devlab::configureES8311(my_pins, codecPins, myWire)) {
-    Serial.println("ERROR: pines ES8311 invalidos o ya registrados");
+    Serial.println("ERROR: invalid ES8311 pins or pins already registered");
     return;
   }
   auto config = i2s.defaultConfig(TX_MODE);
@@ -1209,7 +1209,7 @@ void setup() {
   config.buffer_count = kAudioDmaBufferCount;
   config.sd_active = false;
   if (!i2s.begin(config)) {
-    showMessage("Error ES8311/I2S");
+    showMessage("ES8311/I2S error");
     return;
   }
   musicMeter.begin(AudioInfo(44100, 2, 16));
@@ -1219,10 +1219,10 @@ void setup() {
   player.setMetadataCallback(onMetadata);
   playerReady = player.begin();
   if (!playerReady) {
-    showMessage("Error al abrir MP3");
+    showMessage("Could not open MP3");
     return;
   }
-  // El volumen lo aplica MusicLevelMeter con rampa; el reproductor va a 1.0.
+  // MusicLevelMeter applies a volume ramp; the player stays at 1.0.
   player.setVolume(1.0f);
   targetGain.store(currentVolume);
   syncTrack();
@@ -1234,15 +1234,15 @@ void setup() {
   footerDirty = false;
   printHelp();
   if (controlQueue == nullptr) {
-    Serial.println("No se pudo iniciar la tarea OLED/encoder");
+    Serial.println("Could not start OLED/encoder task");
     return;
   }
   const BaseType_t taskResult = xTaskCreatePinnedToCore(
       uiTask, "oled_encoder", 8192, nullptr, 1, &uiTaskHandle, 0);
   if (taskResult == pdPASS) {
-    Serial.printf("Interfaz en nucleo 0; audio en nucleo %d\n", xPortGetCoreID());
+    Serial.printf("UI on core 0; audio on core %d\n", xPortGetCoreID());
   } else {
-    Serial.println("No se pudo iniciar la tarea OLED/encoder");
+    Serial.println("Could not start OLED/encoder task");
   }
 }
 
