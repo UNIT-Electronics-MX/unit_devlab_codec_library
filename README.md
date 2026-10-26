@@ -52,6 +52,7 @@ void setup() {
 | `player_mp3_uart` | Control playback over the serial port | microSD |
 | `player_mp3_oled` | MP3 player with display | microSD, OLED, optional encoder |
 | `player_mp3_oled_encoder_volume` | Display and encoder volume control | microSD, OLED, UE0172 encoder |
+| `player_mp3_oled_encoder_pomodoro` | MP3 player with an OLED Pomodoro timer | microSD, OLED, UE0172 encoder |
 | `player_mp3_oled_slider` | Display and slider on a second I2C bus | microSD, OLED, encoder, slider |
 
 The sine wave sketch selects these pins at compile time:
@@ -61,7 +62,13 @@ The sine wave sketch selects these pins at compile time:
 | ESP32-WROOM | 21 | 22 | 0 | 4 | 16 | 15 |
 | ESP32-C6 | 22 | 23 | 21 | 3 | 15 | 20 |
 
-Each sketch uses the pin mapping of its DualMCU prototype. Pin assignments may differ between ESP32 and ESP32-C6 variants. Check your board wiring before uploading. All six sketches compiled with ESP32 Arduino core 3.3.1. The encoder volume sketch also compiled for ESP32-C6, and the sine wave sketch compiled for ESP32-S3. Audio playback, shared buses, and controls still need hardware testing.
+Each sketch uses the pin mapping of its DualMCU prototype. Pin assignments may differ between ESP32 and ESP32-C6 variants. Check your board wiring before uploading. All seven sketches compiled with ESP32 Arduino core 3.3.1. Both encoder variants also compiled for ESP32-C6, and the sine wave sketch compiled for ESP32-S3. Audio playback, shared buses, and controls still need hardware testing.
+
+### Pomodoro controls
+
+`player_mp3_oled_encoder_pomodoro` keeps MP3 playback active while its timer runs. Hold the encoder button for 800 ms to switch between the player and Pomodoro screens. On the Pomodoro screen, click to start or pause and double-click to reset the current phase. Turning the encoder while a focus phase is stopped sets its length from 1 to 60 minutes; turning it while running or during a break adjusts music volume.
+
+The default cycle is 25 minutes of focus, 5 minutes of short break, and a 15-minute long break after every four completed focus phases. Phases advance automatically. Transitions appear on the OLED and Serial; this version does not play a separate chime. It needs a microSD card with an MP3 file, just like the encoder volume example, and uses that example's ESP32-WROOM and ESP32-C6 pin mappings.
 
 From the directory containing the four repositories:
 
