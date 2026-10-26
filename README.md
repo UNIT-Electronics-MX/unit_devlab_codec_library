@@ -20,6 +20,7 @@ The unique `DevLab_*.h` headers select these libraries even when the original li
 
 ```cpp
 #include <DevLab_Codec_ES.h>
+#include <DevLab_I2SCodecStream.h>
 
 TwoWire codecWire(0);
 DriverPins codecPins;

@@ -1,7 +1,6 @@
 // Audio output test with ESP32-WROOM or ESP32-C6 and the ES8311 codec.
 #include <DevLab_Codec_ES.h>
-#include <DevLab_AudioTools.h>
-#include "AudioTools/AudioLibs/I2SCodecStream.h"
+#include <DevLab_I2SCodecStream.h>
 
 #if defined(CONFIG_IDF_TARGET_ESP32C6)
 // ESP32-C6 pinout used by the DualMCU MP3 encoder example.
