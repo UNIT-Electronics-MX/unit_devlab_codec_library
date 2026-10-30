@@ -2,3 +2,5 @@ build/
 .arduino/
 *.bin
 *.elf
+__pycache__/
+extras/*.wav
