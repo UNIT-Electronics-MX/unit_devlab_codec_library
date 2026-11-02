@@ -15,7 +15,9 @@ Install these repositories in separate folders inside your Arduino `libraries` d
 
 The sine wave and microphone examples need Audio Driver and Audio Tools. The MP3 examples need all three forks. The OLED examples also need Adafruit GFX and Adafruit SSD1306. The Pomodoro example also needs `DevLab_BL` for its eyes display, without enabling Bluetooth. Both encoder examples need Adafruit NeoPixel on ESP32-C6.
 
-The unique `DevLab_*.h` headers select these libraries even when the original libraries are installed. The longer `unit_devlab_fork_*.h` headers remain available for existing sketches. Install the forks from GitHub until they are registered in Arduino Library Manager. Accordingly, `library.properties` does not declare automatic dependencies yet.
+The libraries also work independently: `DevLab_AudioDriver`, `DevLab_LibHelix`, and the core of `DevLab_AudioTools` compile on their own. Basic `<DevLab_Codec_ES.h>` use needs `DevLab_AudioDriver`. Microphone and I2S playback add `DevLab_AudioTools`; MP3 playback also adds `DevLab_LibHelix`. The extra display and Pomodoro libraries are used by examples. `library.properties` includes these example dependencies so a Library Manager installation can build the supplied examples without separate dependency selection.
+
+The unique `DevLab_*.h` headers select these libraries even when the original libraries are installed. The longer `unit_devlab_fork_*.h` headers remain available for existing sketches. All of these libraries are registered in Arduino Library Manager, and `library.properties` declares them as dependencies, so installing `DevLab_Codec_ES` from Library Manager offers to install them too. For a manual install, place each repository in its own folder inside your Arduino `libraries` directory.
 
 Use `<DevLab_AudioSourceSD.h>` for SD input, `<DevLab_AudioSource.h>` when extending the base source class, and `<DevLab_CodecMP3Helix.h>` for MP3 decoding. These headers keep Audio Tools' internal file layout out of sketches.
 
